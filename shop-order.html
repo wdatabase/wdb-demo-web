@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+    <meta charset="utf-8">
+    <title>
+        shop - wdb examples
+    </title>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <meta name="description" content="wdb examples">
+    </head>
+    <body>
+        <div id="login-out"><span id="user"></span><a href="#">退出</a></div>
+        <div id="nv">
+            <div id="items">
+                <div class="item"><a href="./text.html">文本</a></div>
+                <div class="item"><a href="./search.html">搜索</a></div>
+                <div class="item"><a href="./img.html">图片</a></div>
+                <div class="item"><a href="./video.html">视频</a></div>
+                <div class="item"><a href="./file.html">文件</a></div>
+                <div class="item">商城</div>
+                <div class="item"><a href="./big.html">大文件</a></div>
+            </div>
+            <div class="clean"></div>
+        </div>
+        <div id="content">
+            <div><a href="./shop.html">返回</a></div>
+            <h2>全部订单</h2>
+            <div id="sc">
+                <input id="ctitle" type="text" placeholder="标题" >
+                <input type="button" id="reset" value="重置" />
+                <input type="button" id="sc_sub" value="搜索" />
+            </div>
+            <div id="sort">
+                排序： 
+                <a d="tasc" href="javascript:void(0)">时间升序</a>
+                <a d="tdesc" href="javascript:void(0)">时间降序</a>
+                <a d="pasc" href="javascript:void(0)">总价升序</a>
+                <a d="pdesc" href="javascript:void(0)">总价降序</a>
+            </div>
+            <div id="cons">
+            </div>
+            <div id="page"></div>
+        </div>
+        <script type="text/javascript" src="./js/app.js"></script>
+        <script type="text/javascript" src="./js/auth.js"></script>
+        <script>
+            let cid = '';
+            let cur_page = 1;
+            let page_size = 8;
+            let title_key = '';
+            let csort = 'tdesc';
+
+            document.querySelectorAll('#sort a').forEach(function(item){
+                item.addEventListener('click', () => {
+                    let cd = item.getAttribute('d');
+                    csort = cd;
+                    load();
+                });
+            });
+            document.querySelector('#sc_sub').addEventListener('click', () => {
+                title_key = document.querySelector('#ctitle').value;
+                load();
+            });
+            document.querySelector('#reset').addEventListener('click', () => {
+                document.querySelector('#ctitle').value = '';
+                title_key = '';
+                csort = 'tdesc';
+                load();
+            });
+            document.querySelector('#user').innerHTML = ' (' + localStorage.getItem('u') + ') ';
+            document.querySelector('#login-out a').addEventListener('click', () => {
+                localStorage.removeItem('o');
+                location.href = './index.html';
+            });
+            function load() {
+                let offset = (cur_page - 1) * page_size;
+                let o = localStorage.getItem('o');
+                fetch(new Request(host + '/shop/order/list', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        mode:'cors',
+                        body: JSON.stringify({'o': o, 'titlekey': title_key, 'offset': offset, 'limit': page_size, 'order': csort}),
+                    }))
+                .then(response => {
+                    if (response.status === 200) {
+                    return response.json();
+                    } else {
+                    throw new Error('Something went wrong on api server!');
+                    }
+                })
+                .then(response => {
+                    if(response.code == 200) {
+                        let total = response.total;
+                        let list = response.list;
+                        let cons = '';
+                        let o = localStorage.getItem('o');
+                        for (const info of list) {
+                            cons += `<div class="list">
+                                        <div class="img"><img src="${host + '/shop/pro/img/data?uuid=' + info.imgid + '&o=' + o}"></div>
+                                        <div class="dis">
+                                            <div class="title">${info.title}</div>
+                                            <div class="time">${timestampToTime(info.updateTime)}</div>
+                                            <div class="pc">总价：￥ ${info.total}</div>
+                                        </div>
+                                        <div class="tool">
+                                            <a href="./shop-order-info.html?uuid=${info.uuid}"><button class="add">详情</button></a>
+                                        </div>
+                                        <div class="clean"></div>
+                                    </div>`;
+                        }
+                        document.querySelector('#cons').innerHTML = cons;
+                        let all_page = Math.ceil(total / page_size);
+                        document.querySelector('#page').innerHTML = createPage(all_page, cur_page);
+                        document.querySelectorAll('#page .plist').forEach(function(item){
+                            item.addEventListener('click', () => {
+                                cur_page = parseInt(item.innerHTML);
+                                load();
+                            });
+                        });
+                        document.querySelectorAll('#cons .add').forEach(function(item){
+                            item.addEventListener('click', () => {
+                                cid = item.getAttribute('did');
+                                item.nextElementSibling.style.display = 'inline';
+                                add_to_cart(cid);
+                            });
+                        });
+                    } else if(response.code === 403) {
+                        loginout();
+                    }
+                }).catch(error => {
+                    alert(error);
+                });
+            }
+            load();
+            document.querySelector('#user').innerHTML = ' (' + localStorage.getItem('u') + ') ';
+        </script>
+        <style>
+            body{margin: 0;}
+            #login{margin: 0 auto;width: 300px;}
+            #login .title{margin: 2rem 0;font-size: 2rem;}
+            #login label{width: 50px;display: block;margin: 0.2rem 0;}
+            #login input{padding: 0.2rem;}
+            #login .sub{margin: 1rem 0;}
+            #dis{margin: 1rem;border: 1px #ddd solid;padding: 1rem;color: #666;}
+            #login-out{text-align: right;padding: 1rem;}
+            .clean{clear: both;}
+            #nv{margin-bottom: 1rem;border-bottom: 1px #ddd solid;padding: 1rem;}
+            #nv #items{margin: 0 auto; width: 35rem;font-size: 1rem;}
+            #nv .item{float: left;width: 5rem;}
+            #content{margin: 0 auto;max-width: 980px;min-height: 800px;}
+            #create{text-align: right;padding: 1rem;}
+            #send-box{display: none;}
+            #title{margin: 0 2%;border: 1px #ddd solid;padding: 1rem;width: 92%;}
+            #con{margin: 2%;border: 1px #ddd solid;padding: 1rem;width: 92%;height: 15rem;}
+            #sub{margin: 2rem 4rem;text-align: right;}
+            #sub button{margin-left: 3rem;}
+            #cons .list{padding: 0.5rem;border: 1px #eee solid;margin: 0.5rem;}
+            #cons .list .img{float: left;width: 80px;height: 80px;overflow: hidden;}
+            #cons .list .img img{width: 80px;overflow: hidden;}
+            #cons .list .dis{float: left;margin-left: 1rem;width: 80%;}
+            #cons .list .pic{width: 23rem;height: 15rem;overflow: hidden;}
+            #cons .list .pic img{height: 15rem;}
+            #cons .list .title{margin: 0.5rem 0;width: 13rem;overflow: hidden;}
+            #cons .list .tool{margin-top: 1rem;float: left;}
+            #page-box{margin: 1rem auto;width: 20rem;}
+            #page-box .plist{width: 1rem;text-align: center;margin: 0.4rem;padding: 0.4rem;float: left;border: 1px #fff solid;cursor: pointer;}
+            #page-box .plist:hover{background: #eee;}
+            #page-box .cur{border-bottom: 1px #00f solid;}
+            #sort{margin: 1rem 0;}
+            #sort a{margin-left: 1rem;}
+        </style>
+    </body>
+</html>

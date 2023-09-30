@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+    <meta charset="utf-8">
+    <title>
+        shop - wdb examples
+    </title>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <meta name="description" content="wdb examples">
+    </head>
+    <body>
+        <div id="login-out"><span id="user"></span><a href="#">退出</a></div>
+        <div id="nv">
+            <div id="items">
+                <div class="item"><a href="./text.html">文本</a></div>
+                <div class="item"><a href="./search.html">搜索</a></div>
+                <div class="item"><a href="./img.html">图片</a></div>
+                <div class="item"><a href="./video.html">视频</a></div>
+                <div class="item"><a href="./file.html">文件</a></div>
+                <div class="item">商城</div>
+                <div class="item"><a href="./big.html">大文件</a></div>
+            </div>
+            <div class="clean"></div>
+        </div>
+        <div id="content">
+            <div><a href="./shop-order.html">返回</a></div>
+            <h2>订单详情</h2>
+            <div id="cons">
+            </div>
+            <div id="page"></div>
+        </div>
+        <script type="text/javascript" src="./js/app.js"></script>
+        <script type="text/javascript" src="./js/auth.js"></script>
+        <script>
+            let cid = '';
+            let cur_page = 1;
+            let page_size = 8;
+
+            document.querySelector('#login-out a').addEventListener('click', () => {
+                localStorage.removeItem('o');
+                location.href = './index.html';
+            });
+            function load() {
+                let id = getQueryString('uuid');
+                fetch(new Request(host + '/shop/order/info?uuid=' + id + '&o=' + localStorage.getItem('o'), {
+                        method: 'GET',
+                        mode:'cors'
+                    }))
+                .then(response => {
+                    if (response.status === 200) {
+                        return response.json();
+                    } else {
+                        throw new Error('Something went wrong on api server!');
+                    }
+                })
+                .then(response => {
+                    if(response.code == 200) {
+                        let cons = '';
+                        
+                        for (const info of response.list) {
+                            cons += `<div class="list">
+                                        <div class="img"><img src="${host + '/shop/pro/img/data?uuid=' + info.imgid + '&o=' + localStorage.getItem('o')}"></div>
+                                        <div class="title">${info.title}</div>
+                                        <div class="price">价格：￥${info.price}</div>
+                                        <div class="num">数量：${info.num}</div>
+                                        <div class="clean"></div>
+                                    </div>`;
+                        }
+                        cons += `<div class="clean"></div>`;
+                        document.querySelector('#cons').innerHTML = cons;
+                        
+                        document.querySelectorAll('#cons .dnum').forEach(function(item){
+                            item.addEventListener('click', () => {
+                                let id = item.getAttribute('did');
+                                let num = parseInt(item.nextElementSibling.value);
+                                if(num > 1){
+                                    let cnum = num - 1;
+                                    item.nextElementSibling.value = cnum;
+                                    up_cart(id, cnum);
+                                }
+                            });
+                        });
+
+                        document.querySelectorAll('#cons .bnum').forEach(function(item){
+                            item.addEventListener('change', () => {
+                                let id = item.getAttribute('did');
+                                let num = parseInt(item.value);
+                                item.value = num;
+                                up_cart(id, num);
+                            });
+                        });
+
+                        document.querySelectorAll('#cons .anum').forEach(function(item){
+                            item.addEventListener('click', () => {
+                                let id = item.getAttribute('did');
+                                let next = item.previousElementSibling;
+                                let max = parseInt(next.getAttribute('iv'));
+                                let num = parseInt(next.value) + 1;
+                                if (num > max) {
+                                    num = max;
+                                }
+                                item.previousElementSibling.value = num;
+                                up_cart(id, num);
+                            });
+                        });
+
+                        document.querySelectorAll('#cons .del').forEach(function(item){
+                            item.addEventListener('click', () => {
+                                let uuid = item.getAttribute('did');
+                                del_from_cart(uuid);
+                            });
+                        });
+                    } else if(response.code === 403) {
+                        loginout();
+                    }
+                }).catch(error => {
+                    alert(error);
+                });
+            }
+            load();
+            document.querySelector('#user').innerHTML = ' (' + localStorage.getItem('u') + ') ';
+        </script>
+        <style>
+            body{margin: 0;}
+            #login{margin: 0 auto;width: 300px;}
+            #login .title{margin: 2rem 0;font-size: 2rem;}
+            #login label{width: 50px;display: block;margin: 0.2rem 0;}
+            #login input{padding: 0.2rem;}
+            #login .sub{margin: 1rem 0;}
+            #dis{margin: 1rem;border: 1px #ddd solid;padding: 1rem;color: #666;}
+            #login-out{text-align: right;padding: 1rem;}
+            .clean{clear: both;}
+            #nv{margin-bottom: 1rem;border-bottom: 1px #ddd solid;padding: 1rem;}
+            #nv #items{margin: 0 auto; width: 35rem;font-size: 1rem;}
+            #nv .item{float: left;width: 5rem;}
+            #content{margin: 0 auto;max-width: 980px;min-height: 800px;}
+            #create{text-align: right;padding: 1rem;}
+            #send-box{display: none;}
+            #title{margin: 0 2%;border: 1px #ddd solid;padding: 1rem;width: 92%;}
+            #con{margin: 2%;border: 1px #ddd solid;padding: 1rem;width: 92%;height: 15rem;}
+            #sub{margin: 2rem 4rem;text-align: right;}
+            #sub button{margin-left: 3rem;}
+            #cons .list{padding: 0.5rem;border: 1px #eee solid;margin: 0.5rem;}
+            #cons .list .img{float: left;width: 100px;height: 100px;overflow: hidden;}
+            #cons .list .img img{width: 100px;overflow: hidden;}
+            #cons .list .title{margin-top: 1rem;float: left;margin-left: 1rem;width: 52%;}
+            #cons .list .price{margin-top: 1rem;float: left;margin-left: 1rem;width: 15%;}
+            #cons .list .num{margin-top: 1rem;float: left;margin-left: 1rem;width: 10%;}
+            #cons .list .tool{margin-top: 1rem;float: left;}
+            #cons .list .bnum{width: 2rem;text-align: center;}
+            #cons .list .del{margin-left: 2rem;}
+            #page-box{margin: 1rem auto;width: 20rem;}
+            #page-box .plist{width: 1rem;text-align: center;margin: 0.4rem;padding: 0.4rem;float: left;border: 1px #fff solid;cursor: pointer;}
+            #page-box .plist:hover{background: #eee;}
+            #page-box .cur{border-bottom: 1px #00f solid;}
+        </style>
+    </body>
+</html>

@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+    <meta charset="utf-8">
+    <title>
+        shop - wdb examples
+    </title>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <meta name="description" content="wdb examples">
+    </head>
+    <body>
+        <div id="login-out"><span id="user"></span><a href="#">退出</a></div>
+        <div id="nv">
+            <div id="items">
+                <div class="item"><a href="./text.html">文本</a></div>
+                <div class="item"><a href="./search.html">搜索</a></div>
+                <div class="item"><a href="./img.html">图片</a></div>
+                <div class="item"><a href="./video.html">视频</a></div>
+                <div class="item"><a href="./file.html">文件</a></div>
+                <div class="item">商城</div>
+                <div class="item"><a href="./big.html">大文件</a></div>
+            </div>
+            <div class="clean"></div>
+        </div>
+        <div id="content">
+            <h5>通过商品下单流程展示“数据库事务”的使用</h5>
+            <div>
+                下单时检查余额并扣减，下单成功加积分:<br/>
+                当前余额：￥ <span id="amt">0</span> <br/>
+                <input id="amt_num" type="text" placeholder="充值金额" /> 
+                <button id="amt_sub">确定</button> 
+                <button id="push">充值</button><br/>
+                积分：<span id="point">0</span>
+            </div>
+            <div id="create">
+                <a href="./shop-categorize.html"><button>管理分类</button></a> 
+                <a href="./shop-send.html"><button>管理商品</button></a>
+                <a href="./shop-cart.html"><button>购物车</button></a> 
+                <a href="./shop-order.html"><button>订单</button></a> 
+            </div>
+            <div id="send-box">
+                <input id="filepicker" accept=".*" type="file">
+                <button id="cancel">取消</button>
+                <button id="sub">上传</button>
+            </div>
+            <div id="ctgs"></div>
+            <div id="sc">
+                <input id="ctitle" type="text" placeholder="标题" >
+                <input id="begin" type="text" placeholder="最低价格" >
+                <input id="end" type="text" placeholder="最高价格" >
+                <input type="button" id="reset" value="重置" />
+                <input type="button" id="sc_sub" value="搜索" />
+            </div>
+            <div id="sort">
+                排序： 
+                <a d="tasc" href="javascript:void(0)">时间升序</a>
+                <a d="tdesc" href="javascript:void(0)">时间降序</a>
+                <a d="pasc" href="javascript:void(0)">价格升序</a>
+                <a d="pdesc" href="javascript:void(0)">价格降序</a>
+            </div>
+            <div id="cons">
+            </div>
+            <div id="page"></div>
+        </div>
+        <script type="text/javascript" src="./js/app.js"></script>
+        <script type="text/javascript" src="./js/auth.js"></script>
+        <script>
+            let cid = '';
+            let cur_page = 1;
+            let page_size = 8;
+            let title_key = '';
+            let index_key = 'all';
+            let csort = 'tdesc';
+            let cbegin = '';
+            let cend = '';
+
+            document.querySelector('#push').addEventListener('click', () => {
+                hide('#push');
+                show('#amt_num');
+                show('#amt_sub');
+            });
+            document.querySelector('#amt_sub').addEventListener('click', () => {
+                let o = localStorage.getItem('o');
+                let num = parseFloat(document.querySelector('#amt_num').value);
+                if(!num) {
+                    alert("金额不能为空");
+                } else {
+                    fetch(new Request(host + '/shop/balance', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({'o': o, 'balance': num}),
+                        mode:'cors'
+                    }))
+                    .then(response => {
+                        if (response.status === 200) {
+                        return response.json();
+                        } else {
+                        throw new Error('Something went wrong on api server!');
+                        }
+                    })
+                    .then(response => {
+                        if(response.code == 200) {
+                            document.querySelector('#amt_num').value = '';
+                            show('#push');
+                            hide('#amt_num');
+                            hide('#amt_sub');
+                            load_shop_info();
+                        } else if(response.code == 403) {
+                            loginout();
+                        } else {
+                            alert(response.msg);
+                        }
+                    }).catch(error => {
+                        alert(error);
+                    });
+                }
+            });
+            document.querySelectorAll('#sort a').forEach(function(item){
+                item.addEventListener('click', () => {
+                    let cd = item.getAttribute('d');
+                    csort = cd;
+                    load();
+                });
+            });
+            document.querySelector('#login-out a').addEventListener('click', () => {
+                localStorage.removeItem('o');
+                location.href = './index.html';
+            });
+            document.querySelector('#create button').addEventListener('click', () => {
+                hide('#create');
+                show('#send-box');
+                cid = '';
+            });
+            document.querySelector('#sc_sub').addEventListener('click', () => {
+                cbegin = document.querySelector('#begin').value;
+                cend = document.querySelector('#end').value;
+                title_key = document.querySelector('#ctitle').value;
+                load();
+            });
+            document.querySelector('#reset').addEventListener('click', () => {
+                document.querySelector('#ctitle').value = '';
+                document.querySelector('#begin').value = '';
+                document.querySelector('#end').value = '';
+                title_key = '';
+                cbegin = '';
+                cend = '';
+                csort = 'tdesc';
+                load();
+            });
+            document.querySelector('#cancel').addEventListener('click', () => {
+                show('#create');
+                document.querySelector('#filepicker').value = '';
+                hide('#send-box');
+            });
+            function load() {
+                let offset = (cur_page - 1) * page_size;
+                let o = localStorage.getItem('o');
+                fetch(new Request(host + '/shop/pro/list', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        mode:'cors',
+                        body: JSON.stringify({'o': o, 'indexkey': index_key, 'titlekey': title_key, 'begin': cbegin, 'end': cend, 'offset': offset, 'limit': page_size, 'order': csort}),
+                    }))
+                .then(response => {
+                    if (response.status === 200) {
+                    return response.json();
+                    } else {
+                    throw new Error('Something went wrong on api server!');
+                    }
+                })
+                .then(response => {
+                    if(response.code == 200) {
+                        let total = response.total;
+                        let list = response.list;
+                        let cons = '';
+                        let o = localStorage.getItem('o');
+                        for (const info of list) {
+                            cons += `<div class="list">
+                                        <div class="img"><img src="${host + '/shop/pro/img/data?uuid=' + info.imgid + '&o=' + o}"></div>
+                                        <div class="dis">
+                                            <div class="title">${info.title}</div>
+                                            <div class="time">${timestampToTime(info.updateTime)}</div>
+                                            <div class="pc">价格：￥ ${info.price}</div>
+                                            <div class="nu">库存：${info.inventory}</div>
+                                        </div>
+                                        <div class="tool">
+                                            <button  did="${info.uuid}" class="add">加入购物车</button> <span class="tips">已加入</span>
+                                        </div>
+                                        <div class="clean"></div>
+                                    </div>`;
+                        }
+                        document.querySelector('#cons').innerHTML = cons;
+                        let all_page = Math.ceil(total / page_size);
+                        document.querySelector('#page').innerHTML = createPage(all_page, cur_page);
+                        document.querySelectorAll('#page .plist').forEach(function(item){
+                            item.addEventListener('click', () => {
+                                cur_page = parseInt(item.innerHTML);
+                                load();
+                            });
+                        });
+                        document.querySelectorAll('#cons .add').forEach(function(item){
+                            item.addEventListener('click', () => {
+                                cid = item.getAttribute('did');
+                                item.nextElementSibling.style.display = 'inline';
+                                add_to_cart(cid);
+                            });
+                        });
+                    } else if(response.code === 403) {
+                        loginout();
+                    }
+                }).catch(error => {
+                    alert(error);
+                });
+            }
+            function add_to_cart(id) {
+                let o = localStorage.getItem('o');
+                fetch(new Request(host + '/shop/cart/add', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({'o': o, 'uuid': id, 'num': 1}),
+                    mode:'cors'
+                }))
+                .then(response => {
+                    if (response.status === 200) {
+                        return response.json();
+                    } else {
+                        throw new Error('Something went wrong on api server!');
+                    }
+                })
+                .then(response => {
+                    if(response.code == 200) {
+
+                    } else if(response.code == 403) {
+                        loginout();
+                    } else {
+                        alert('提交失败');
+                    }
+                }).catch(error => {
+                    alert(error);
+                });
+            }
+            function load_categorize() {
+                let o = localStorage.getItem('o');
+                fetch(new Request(host + '/shop/categorize/list', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        mode:'cors',
+                        body: JSON.stringify({'o': o, 'offset': 0, 'limit': 100, 'order': 'DESC'}),
+                    }))
+                .then(response => {
+                    if (response.status === 200) {
+                        return response.json();
+                    } else {
+                        throw new Error('Something went wrong on api server!');
+                    }
+                })
+                .then(response => {
+                    if(response.code == 200) {
+                        let total = response.total;
+                        let list = response.list;
+                        let cons = '<div class="clist" d="all">全部</div>';
+                        let o = localStorage.getItem('o');
+                        for (const info of list) {
+                            cons += `<div class="clist" d="${info.uuid}">${info.name}</div>`;
+                        }
+                        cons += `<div class="clean"></div>`;
+                        document.querySelector('#ctgs').innerHTML = cons;
+                        document.querySelectorAll('#ctgs .clist').forEach(function(item){
+                            item.addEventListener('click', () => {
+                                cleanr_class();
+                                item.className = 'clist cur';
+                                index_key = item.getAttribute('d');
+                                load();
+                            });
+                        });
+                        document.querySelector('#ctgs .clist').className = 'clist cur';
+                    } else if(response.code === 403) {
+                        loginout();
+                    }
+                }).catch(error => {
+                    alert(error);
+                });
+            }
+            function cleanr_class() {
+                document.querySelectorAll('#ctgs .clist').forEach(function(item){
+                    item.className = 'clist';
+                });
+            }
+            function load_shop_info() {
+                fetch(new Request(host + '/shop/info?o=' + localStorage.getItem('o'), {
+                        method: 'GET',
+                        mode:'cors'
+                    }))
+                .then(response => {
+                    if (response.status === 200) {
+                    return response.json();
+                    } else {
+                    throw new Error('Something went wrong on api server!');
+                    }
+                })
+                .then(response => {
+                    if(response.code == 200) {
+                        let balance = response.info.balance;
+                        let point = response.info.point;
+                        document.querySelector('#amt').innerHTML = balance;
+                        document.querySelector('#point').innerHTML = point;
+                    } else if(response.code === 403) {
+                        loginout();
+                    }
+                }).catch(error => {
+                    alert(error);
+                });
+            }
+            load();
+            load_shop_info();
+            load_categorize();
+            document.querySelector('#user').innerHTML = ' (' + localStorage.getItem('u') + ') ';
+        </script>
+        <style>
+            body{margin: 0;}
+            #login{margin: 0 auto;width: 300px;}
+            #login .title{margin: 2rem 0;font-size: 2rem;}
+            #login label{width: 50px;display: block;margin: 0.2rem 0;}
+            #login input{padding: 0.2rem;}
+            #login .sub{margin: 1rem 0;}
+            #dis{margin: 1rem;border: 1px #ddd solid;padding: 1rem;color: #666;}
+            #login-out{text-align: right;padding: 1rem;}
+            .clean{clear: both;}
+            #nv{margin-bottom: 1rem;border-bottom: 1px #ddd solid;padding: 1rem;}
+            #nv #items{margin: 0 auto; width: 35rem;font-size: 1rem;}
+            #nv .item{float: left;width: 5rem;}
+            #content{margin: 0 auto;max-width: 980px;min-height: 800px;}
+            #create{text-align: right;padding: 1rem;}
+            #send-box{display: none;}
+            #title{margin: 0 2%;border: 1px #ddd solid;padding: 1rem;width: 92%;}
+            #con{margin: 2%;border: 1px #ddd solid;padding: 1rem;width: 92%;height: 15rem;}
+            #sub{margin-left: 2rem;}
+            #sort{margin-top: 1rem;}
+            #sort a{margin-left: 1rem;}
+            #cons .list{padding: 0.5rem;border: 1px #eee solid;margin: 0.5rem;}
+            #cons .list .img{float: left;width: 200px;height: 150px;overflow: hidden;}
+            #cons .list .img img{width: 200px;overflow: hidden;}
+            #cons .list .dis{float: left;margin-left: 1rem;width: 60%;}
+            #cons .list .pic{width: 23rem;height: 15rem;overflow: hidden;}
+            #cons .list .pic img{height: 15rem;}
+            #cons .list .title{margin: 0.5rem 0;width: 13rem;overflow: hidden;}
+            #cons .list .tool{margin-top: 1rem;float: left;}
+            #page-box{margin: 1rem auto;width: 20rem;}
+            #page-box .plist{width: 1rem;text-align: center;margin: 0.4rem;padding: 0.4rem;float: left;border: 1px #fff solid;cursor: pointer;}
+            #page-box .plist:hover{background: #eee;}
+            #page-box .cur{border-bottom: 1px #00f solid;}
+            #amt_num,#amt_sub{display: none;margin: 0.4rem 0;}
+            #amt_num{padding: 0.3rem;}
+            #ctgs{background: #ddd;padding: 0.5rem 0.5rem 0rem 0.5rem;}
+            #ctgs .clist{float: left;padding: 1rem;width: 5rem;text-align: center;}
+            #ctgs .cur{background: #fff;}
+            #sc{margin-top: 3rem;}
+            #ctitle,#begin,#end{padding: 0.4rem;border: 1px #aaa solid;}
+            #ctitle:focus{outline: 0;}
+            .tips{color: #f00;display: none;}
+            #create a{margin-left: 1rem;}
+        </style>
+    </body>
+</html>

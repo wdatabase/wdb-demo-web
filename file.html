@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+    <meta charset="utf-8">
+    <title>
+        file - wdb examples
+    </title>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <meta name="description" content="wdb examples">
+    </head>
+    <body>
+        <div id="login-out"><span id="user"></span><a href="#">退出</a></div>
+        <div id="nv">
+            <div id="items">
+                <div class="item"><a href="./text.html">文本</a></div>
+                <div class="item"><a href="./search.html">搜索</a></div>
+                <div class="item"><a href="./img.html">图片</a></div>
+                <div class="item"><a href="./video.html">视频</a></div>
+                <div class="item">文件</div>
+                <div class="item"><a href="./shop.html">商城</a></div>
+                <div class="item"><a href="./big.html">大文件</a></div>
+            </div>
+            <div class="clean"></div>
+        </div>
+        <div id="content">
+            <div id="create">
+                <button>上传文件</button>
+            </div>
+            <div id="send-box">
+                <input id="filepicker" accept=".*" type="file">
+                <button id="cancel">取消</button>
+                <button id="sub">上传</button>
+            </div>
+            <div id="cons">
+            </div>
+            <div id="page"></div>
+        </div>
+        <script type="text/javascript" src="./js/app.js"></script>
+        <script type="text/javascript" src="./js/auth.js"></script>
+        <script>
+            let cid = '';
+            let cur_page = 1;
+            let page_size = 8;
+
+            document.querySelector('#login-out a').addEventListener('click', () => {
+                localStorage.removeItem('o');
+                location.href = './index.html';
+            });
+            document.querySelector('#create button').addEventListener('click', () => {
+                hide('#create');
+                show('#send-box');
+                cid = '';
+            });
+            document.querySelector('#cancel').addEventListener('click', () => {
+                show('#create');
+                document.querySelector('#filepicker').value = '';
+                hide('#send-box');
+            });
+            document.querySelector('#sub').addEventListener('click', () => {
+                const videos = document.querySelector('#filepicker');
+                const formData = new FormData();
+                formData.append(`file`, videos.files[0]);
+
+                fetch(host + '/file/post?uuid=' + cid + '&o=' + localStorage.getItem('o'), {
+                    method: 'POST',
+                    mode:'cors',
+                    body: formData,
+                })
+                .then(response => response.json())
+                .then(result => {
+                    show('#create');
+                    hide('#send-box');
+                    videos.value = '';
+                    load();
+                })
+                .catch(error => {
+                    alert(error);
+                });
+            });
+            function load() {
+                let offset = (cur_page - 1) * page_size;
+                let id = getQueryString('id');
+                fetch(new Request(host + '/file/list?offset=' + offset + '&limit=' + page_size + '&order=DESC&o='+ localStorage.getItem('o'), {
+                        method: 'GET',
+                        mode:'cors'
+                    }))
+                .then(response => {
+                    if (response.status === 200) {
+                    return response.json();
+                    } else {
+                    throw new Error('Something went wrong on api server!');
+                    }
+                })
+                .then(response => {
+                    if(response.code == 200) {
+                        let total = response.total;
+                        let list = response.list;
+                        let cons = '';
+                        let o = localStorage.getItem('o');
+                        for (const info of list) {
+                            cons += `<div class="list">
+                                        <div class="title">${info.fileName}</div>
+                                        <div class="time">${timestampToTime(info.time)}</div>
+                                        <div class="tool">
+                                            <a target="_blank" href="${host}/file/data?uuid=${info.uuid}&o=${o}"><button  did="${info.uuid}" class="down">下载</button></a>
+                                            <button  did="${info.uuid}" class="update">更新</button>
+                                            <button  did="${info.uuid}" class="del">删除</button>
+                                        </div>
+                                        <div class="clean"></div>
+                                    </div>`;
+                        }
+                        cons += `<div class="clean"></div>`;
+                        document.querySelector('#cons').innerHTML = cons;
+                        let all_page = Math.ceil(total / page_size);
+                        document.querySelector('#page').innerHTML = createPage(all_page, cur_page);
+                        document.querySelectorAll('#page .plist').forEach(function(item){
+                            item.addEventListener('click', () => {
+                                cur_page = parseInt(item.innerHTML);
+                                load();
+                            });
+                        });
+                        document.querySelectorAll('#cons .update').forEach(function(item){
+                            item.addEventListener('click', () => {
+                                cid = item.getAttribute('did');
+                                hide('#create');
+                                show('#send-box');
+                            });
+                        });
+                        document.querySelectorAll('#cons .del').forEach(function(item){
+                            item.addEventListener('click', () => {
+                                let uuid = item.getAttribute('did');
+                                del_file(uuid);
+                            });
+                        });
+                    } else if(response.code === 403) {
+                        loginout();
+                    }
+                }).catch(error => {
+                    alert(error);
+                });
+            }
+            function del_file(uuid) {
+                fetch(new Request(host + '/file/del?uuid=' + uuid + '&o=' + localStorage.getItem('o'), {
+                        method: 'DELETE',
+                        mode:'cors'
+                    }))
+                .then(response => {
+                    if (response.status === 200) {
+                    return response.json();
+                    } else {
+                    throw new Error('Something went wrong on api server!');
+                    }
+                })
+                .then(response => {
+                    if(response.code == 200) {
+                        load();
+                    } else if(response.code === 403) {
+                        loginout();
+                    }
+                }).catch(error => {
+                    alert(error);
+                });
+            }
+            load();
+            document.querySelector('#user').innerHTML = ' (' + localStorage.getItem('u') + ') ';
+        </script>
+        <style>
+            body{margin: 0;}
+            #login{margin: 0 auto;width: 300px;}
+            #login .title{margin: 2rem 0;font-size: 2rem;}
+            #login label{width: 50px;display: block;margin: 0.2rem 0;}
+            #login input{padding: 0.2rem;}
+            #login .sub{margin: 1rem 0;}
+            #dis{margin: 1rem;border: 1px #ddd solid;padding: 1rem;color: #666;}
+            #login-out{text-align: right;padding: 1rem;}
+            .clean{clear: both;}
+            #nv{margin-bottom: 1rem;border-bottom: 1px #ddd solid;padding: 1rem;}
+            #nv #items{margin: 0 auto; width: 35rem;font-size: 1rem;}
+            #nv .item{float: left;width: 5rem;}
+            #content{margin: 0 auto;max-width: 980px;min-height: 800px;}
+            #create{text-align: right;padding: 1rem;}
+            #send-box{display: none;}
+            #title{margin: 0 2%;border: 1px #ddd solid;padding: 1rem;width: 92%;}
+            #con{margin: 2%;border: 1px #ddd solid;padding: 1rem;width: 92%;height: 15rem;}
+            #sub{margin-left: 2rem;}
+            #cons{border-top: 1px #eee solid;margin-top: 2rem;}
+            #cons .list{padding: 0.5rem;border: 1px #eee solid;float: left;margin: 0.5rem;text-align: center;}
+            #cons .list .pic{width: 23rem;height: 15rem;overflow: hidden;}
+            #cons .list .pic img{height: 15rem;}
+            #cons .list .title{margin: 0.5rem 0;height: 1.2rem;width: 13rem;overflow: hidden;}
+            #cons .list .tool{margin-top: 1rem;}
+            #page-box{margin: 1rem auto;width: 20rem;}
+            #page-box .plist{width: 1rem;text-align: center;margin: 0.4rem;padding: 0.4rem;float: left;border: 1px #fff solid;cursor: pointer;}
+            #page-box .plist:hover{background: #eee;}
+            #page-box .cur{border-bottom: 1px #00f solid;}
+        </style>
+    </body>
+</html>

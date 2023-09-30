@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+    <meta charset="utf-8">
+    <title>
+        shop - wdb examples
+    </title>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <meta name="description" content="wdb examples">
+    </head>
+    <body>
+        <div id="login-out"><span id="user"></span><a href="#">退出</a></div>
+        <div id="nv">
+            <div id="items">
+                <div class="item"><a href="./text.html">文本</a></div>
+                <div class="item"><a href="./search.html">搜索</a></div>
+                <div class="item"><a href="./img.html">图片</a></div>
+                <div class="item"><a href="./video.html">视频</a></div>
+                <div class="item"><a href="./file.html">文件</a></div>
+                <div class="item">商城</div>
+                <div class="item"><a href="./big.html">大文件</a></div>
+            </div>
+            <div class="clean"></div>
+        </div>
+        <div id="content">
+            <div><a href="./shop.html">返回</a></div>
+            <h2>发布商品</h2>
+            <div id="create">
+                <button>发布商品</button>
+            </div>
+            <div id="send-box">
+                <div class="list"><label>商品名称：</label><input id="pname" type="text" ></div>
+                <div class="list" id="ctgs"></div>
+                <div class="list"><label>价&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;格：</label><input id="price" type="text" ></div>
+                <div class="list"><label>库&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;存：</label><input id="inventory" type="text" ></div>
+                <div class="list"><label>权&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;重：</label><input id="weight" type="text" ></div>
+                <div class="list">
+                    <label>图&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;片：</label>
+                    <input id="img_id" type="hidden" >
+                    <input id="filepicker" type="file" style="width: 13rem;" >
+                    <button id="up_pic">上传</button>
+                    <div id="pre_view"></div>
+                </div>
+                <div style="text-align: right;">
+                    <button id="cancel">取消</button>
+                    <button id="sub">提交商品</button>
+                </div>
+            </div>
+            <div id="sc">
+                <input id="ctitle" type="text" placeholder="标题" >
+                <input type="button" id="reset" value="重置" />
+                <input type="button" id="sc_sub" value="搜索" />
+            </div>
+            <div id="cons">
+            </div>
+            <div id="page"></div>
+        </div>
+        <script type="text/javascript" src="./js/app.js"></script>
+        <script type="text/javascript" src="./js/auth.js"></script>
+        <script>
+            let cid = '';
+            let cur_page = 1;
+            let page_size = 8;
+            let title_key = '';
+
+            document.querySelector('#login-out a').addEventListener('click', () => {
+                localStorage.removeItem('o');
+                location.href = './index.html';
+            });
+            document.querySelector('#create button').addEventListener('click', () => {
+                hide('#create');
+                show('#send-box');
+                cid = '';
+            });
+            document.querySelector('#cancel').addEventListener('click', () => {
+                show('#create');
+                hide('#send-box');
+                document.querySelector('#pname').value = '';
+                document.querySelector('#price').value = '';
+                document.querySelector('#inventory').value = '';
+                document.querySelector('#weight').value = '';
+                document.querySelector('#filepicker').value = '';
+                document.querySelector('#img_id').value = '';
+                document.querySelector('#pre_view').innerHTML = '';
+                document.querySelectorAll('#ctgs input').forEach(function(item){
+                    if(item.checked){
+                        item.checked = false;
+                    }
+                });
+            });
+            document.querySelector('#up_pic').addEventListener('click', () => {
+                const imgs = document.querySelector('#filepicker');
+                if(!imgs.files[0]){
+                    alert('请选择图片')
+                }else{
+                    const formData = new FormData();
+                    formData.append(`img`, imgs.files[0]);
+
+                    fetch(host + '/shop/pro/img/post?uuid=&o=' + localStorage.getItem('o'), {
+                        method: 'POST',
+                        mode: 'cors',
+                        body: formData,
+                    })
+                    .then(response => response.json())
+                    .then(rsp => {
+                        let img_id = rsp.uuid;
+                        let o = localStorage.getItem('o');
+                        document.querySelector('#img_id').value = img_id;
+                        document.querySelector('#pre_view').innerHTML = `<img src="${host + '/shop/pro/img/data?uuid=' + img_id + '&o=' + o}">`;
+                    })
+                    .catch(error => {
+                        alert(error);
+                    });
+                }
+            });
+            document.querySelector('#sc_sub').addEventListener('click', () => {
+                title_key = document.querySelector('#ctitle').value;
+                load();
+            });
+            document.querySelector('#reset').addEventListener('click', () => {
+                document.querySelector('#ctitle').value = '';
+                title_key = '';
+                load();
+            });
+            document.querySelector('#sub').addEventListener('click', () => {
+                let tps = [];
+                document.querySelectorAll('#ctgs input').forEach(function(item){
+                    if(item.checked){
+                        tps.push(item.value);
+                    }
+                });
+                let pname = document.querySelector('#pname').value;
+                let price = parseFloat(document.querySelector('#price').value);
+                let inventory = parseInt(document.querySelector('#inventory').value);
+                let weight = parseFloat(document.querySelector('#weight').value);
+                let img_id = document.querySelector('#img_id').value;
+                let o = localStorage.getItem('o');
+                if(!pname){
+                    alert('商品名称不能为空');
+                } else if(!price){
+                    alert('价格不能为空');
+                } else if(!inventory){
+                    alert('库存不能为空');
+                } else if(!weight){
+                    alert('权重不能为空');
+                } else if(!img_id){
+                    alert('图片不能为空');
+                } else {
+                    fetch(new Request(host + '/shop/pro/post', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            mode:'cors',
+                            body: JSON.stringify({'o': o, 'uuid': cid, 'title': pname, 'price': price, 'weight': weight, 'inventory': inventory, 'imgid': img_id, 'tps': tps}),
+                        }))
+                    .then(response => {
+                        if (response.status === 200) {
+                            return response.json();
+                        } else {
+                            throw new Error('Something went wrong on api server!');
+                        }
+                    })
+                    .then(response => {
+                        if(response.code == 200) {
+                            show('#create');
+                            hide('#send-box');
+                            document.querySelector('#pname').value = '';
+                            document.querySelector('#price').value = '';
+                            document.querySelector('#inventory').value = '';
+                            document.querySelector('#weight').value = '';
+                            document.querySelector('#filepicker').value = '';
+                            document.querySelector('#img_id').value = '';
+                            document.querySelector('#pre_view').innerHTML = '';
+                            document.querySelectorAll('#ctgs input').forEach(function(item){
+                                if(item.checked){
+                                    item.checked = false;
+                                }
+                            });
+                            
+                            load();
+                        } else if(response.code === 403) {
+                            loginout();
+                        }
+                    }).catch(error => {
+                        alert(error);
+                    });
+                }
+            });
+            function load_categorize() {
+                let o = localStorage.getItem('o');
+                fetch(new Request(host + '/shop/categorize/list', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        mode:'cors',
+                        body: JSON.stringify({'o': o, 'offset': 0, 'offset': 0, 'limit': 100, 'order': 'ASC'}),
+                    }))
+                .then(response => {
+                    if (response.status === 200) {
+                        return response.json();
+                    } else {
+                        throw new Error('Something went wrong on api server!');
+                    }
+                })
+                .then(response => {
+                    if(response.code == 200) {
+                        let total = response.total;
+                        let list = response.list;
+                        let cons = '<label>分&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;类：</label>';
+                        let o = localStorage.getItem('o');
+                        for (const info of list) {
+                            cons += `<input type="checkbox" value="${info.uuid}" >${info.name}`;
+                        }
+                        document.querySelector('#ctgs').innerHTML = cons;
+                        
+                    } else if(response.code === 403) {
+                        loginout();
+                    }
+                }).catch(error => {
+                    alert(error);
+                });
+            }
+            load_categorize();
+            function load() {
+                let offset = (cur_page - 1) * page_size;
+                let o = localStorage.getItem('o');
+                fetch(new Request(host + '/shop/pro/list', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        mode:'cors',
+                        body: JSON.stringify({'o': o, 'indexkey': 'all', 'titlekey': title_key, 'begin': '', 'end': '', 'offset': offset, 'limit': page_size, 'order': 'tdesc'}),
+                    }))
+                .then(response => {
+                    if (response.status === 200) {
+                    return response.json();
+                    } else {
+                    throw new Error('Something went wrong on api server!');
+                    }
+                })
+                .then(response => {
+                    if(response.code == 200) {
+                        let total = response.total;
+                        let list = response.list;
+                        let cons = '';
+                        let o = localStorage.getItem('o');
+                        for (const info of list) {
+                            cons += `<div class="list">
+                                        <div class="img"><img src="${host + '/shop/pro/img/data?uuid=' + info.imgid + '&o=' + o}"></div>
+                                        <div class="dis">
+                                            <div class="title">${info.title}</div>
+                                            <div class="time">${timestampToTime(info.createTime)}</div>
+                                            <div class="pc">价格：￥ ${info.price}</div>
+                                            <div class="nu">库存：${info.inventory}</div>
+                                        </div>
+                                        <div class="tool">
+                                            <button  did="${info.uuid}" class="update">更新</button>
+                                            <button  did="${info.uuid}" class="del">删除</button>
+                                        </div>
+                                        <div class="clean"></div>
+                                    </div>`;
+                        }
+                        document.querySelector('#cons').innerHTML = cons;
+                        let all_page = Math.ceil(total / page_size);
+                        document.querySelector('#page').innerHTML = createPage(all_page, cur_page);
+                        document.querySelectorAll('#page .plist').forEach(function(item){
+                            item.addEventListener('click', () => {
+                                cur_page = parseInt(item.innerHTML);
+                                load();
+                            });
+                        });
+                        document.querySelectorAll('#cons .update').forEach(function(item){
+                            item.addEventListener('click', () => {
+                                cid = item.getAttribute('did');
+                                hide('#create');
+                                show('#send-box');
+                                load_pro(cid);
+                            });
+                        });
+                        document.querySelectorAll('#cons .del').forEach(function(item){
+                            item.addEventListener('click', () => {
+                                let uuid = item.getAttribute('did');
+                                del_pro(uuid);
+                            });
+                        });
+                    } else if(response.code === 403) {
+                        loginout();
+                    }
+                }).catch(error => {
+                    alert(error);
+                });
+            }
+            function load_pro(id) {
+                fetch(new Request(host + '/shop/pro/info?uuid=' + id + '&o=' + localStorage.getItem('o'), {
+                        method: 'GET',
+                        mode:'cors'
+                    }))
+                .then(response => {
+                    if (response.status === 200) {
+                    return response.json();
+                    } else {
+                    throw new Error('Something went wrong on api server!');
+                    }
+                })
+                .then(response => {
+                    if(response.code == 200) {
+                        let o = localStorage.getItem('o');
+                        document.querySelector('#pname').value = response.info.title;
+                        document.querySelector('#price').value = response.info.price;
+                        document.querySelector('#inventory').value = response.info.inventory;
+                        document.querySelector('#weight').value = response.info.weight;
+                        document.querySelector('#img_id').value = response.info.imgid;
+                        document.querySelector('#pre_view').innerHTML = `<img src="${host + '/shop/pro/img/data?uuid=' + response.info.imgid + '&o=' + o}">`;
+                        document.querySelectorAll('#ctgs input').forEach(function(item){
+                            if(item.checked){
+                                item.checked = false;
+                            }
+                        });
+                        document.querySelectorAll('#ctgs input').forEach(function(item){
+                            let cuuid = item.value;
+                            if(response.info.tps.includes(cuuid)){
+                                item.checked = true;
+                            }
+                        });
+                    } else if(response.code === 403) {
+                        loginout();
+                    }
+                }).catch(error => {
+                    alert(error);
+                });
+            }
+            function del_pro(uuid) {
+                fetch(new Request(host + '/shop/pro/del?uuid=' + uuid + '&o=' + localStorage.getItem('o'), {
+                        method: 'DELETE',
+                        mode:'cors'
+                    }))
+                .then(response => {
+                    if (response.status === 200) {
+                    return response.json();
+                    } else {
+                    throw new Error('Something went wrong on api server!');
+                    }
+                })
+                .then(response => {
+                    if(response.code == 200) {
+                        load();
+                    } else if(response.code === 403) {
+                        loginout();
+                    }
+                }).catch(error => {
+                    alert(error);
+                });
+            }
+            load();
+            document.querySelector('#user').innerHTML = ' (' + localStorage.getItem('u') + ') ';
+        </script>
+        <style>
+            body{margin: 0;}
+            #login{margin: 0 auto;width: 300px;}
+            #login .title{margin: 2rem 0;font-size: 2rem;}
+            #login label{width: 50px;display: block;margin: 0.2rem 0;}
+            #login input{padding: 0.2rem;}
+            #login .sub{margin: 1rem 0;}
+            #dis{margin: 1rem;border: 1px #ddd solid;padding: 1rem;color: #666;}
+            #login-out{text-align: right;padding: 1rem;}
+            .clean{clear: both;}
+            #nv{margin-bottom: 1rem;border-bottom: 1px #ddd solid;padding: 1rem;}
+            #nv #items{margin: 0 auto; width: 35rem;font-size: 1rem;}
+            #nv .item{float: left;width: 5rem;}
+            #content{margin: 0 auto;max-width: 980px;min-height: 800px;}
+            #create{text-align: right;padding: 1rem;}
+            #send-box{display: none;}
+            #send-box .list{margin-bottom: 1rem;}
+            #pname,#price,#inventory,#weight{padding: 0.3rem;width: 80%;}
+            #ctgs input{margin-left: 1rem;}
+            #title{margin: 0 2%;border: 1px #ddd solid;padding: 1rem;width: 92%;}
+            #con{margin: 2%;border: 1px #ddd solid;padding: 1rem;width: 92%;height: 15rem;}
+            #sub{margin-left: 2rem;}
+            #cons{border-top: 1px #eee solid;margin-top: 2rem;}
+            #cons .list{padding: 0.5rem;border: 1px #eee solid;margin: 0.5rem;}
+            #cons .list .img{float: left;width: 200px;height: 150px;overflow: hidden;}
+            #cons .list .img img{width: 200px;overflow: hidden;}
+            #cons .list .dis{float: left;margin-left: 1rem;width: 60%;}
+            #cons .list .pic{width: 23rem;height: 15rem;overflow: hidden;}
+            #cons .list .pic img{height: 15rem;}
+            #cons .list .title{margin: 0.5rem 0;width: 13rem;overflow: hidden;}
+            #cons .list .tool{margin-top: 1rem;float: left;}
+            #page-box{margin: 1rem auto;width: 20rem;}
+            #page-box .plist{width: 1rem;text-align: center;margin: 0.4rem;padding: 0.4rem;float: left;border: 1px #fff solid;cursor: pointer;}
+            #page-box .plist:hover{background: #eee;}
+            #page-box .cur{border-bottom: 1px #00f solid;}
+            #pre_view{margin-bottom: 2rem;margin-top: 1rem;width: 200px;height: 200px;border: 1px #fff solid;margin-left: 5.5rem;overflow: hidden;}
+            #pre_view img{width: 200px;}
+            #sc{margin-top: 3rem;}
+            #ctitle{padding: 0.4rem;border: 1px #aaa solid;}
+            #ctitle:focus{outline: 0;}
+        </style>
+    </body>
+</html>

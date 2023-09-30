@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+    <meta charset="utf-8">
+    <title>
+        search - wdb examples
+    </title>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <meta name="description" content="wdb examples">
+    </head>
+    <body>
+        <div id="login-out"><span id="user"></span><a href="#">退出</a></div>
+        <div id="nv">
+            <div id="items">
+                <div class="item"><a href="./text.html">文本</a></div>
+                <div class="item">搜索</div>
+                <div class="item"><a href="./img.html">图片</a></div>
+                <div class="item"><a href="./video.html">视频</a></div>
+                <div class="item"><a href="./file.html">文件</a></div>
+                <div class="item"><a href="./shop.html">商城</a></div>
+                <div class="item"><a href="./big.html">大文件</a></div>
+            </div>
+            <div class="clean"></div>
+        </div>
+        <div id="content">
+            <h5>创建索引对内容进行搜索/排序</h5>
+            <div id="create">
+                <button>发布文本</button>
+            </div>
+            <div id="send-box">
+                <div><input id="title" type="text" placeholder="标题" ></div>
+                <div><input id="score" type="text" placeholder="评分(1.0-10.0)" ></div>
+                <div><textarea id="con" placeholder="内容"></textarea></div>
+                <div><button id="cancel">取消</button><button id="sub">提交</button></div>
+            </div>
+            <div id="sc">
+                <input id="ctitle" type="text" placeholder="标题" >
+                <input id="cscore" type="text" placeholder="最低评分" >
+                <input id="begin" type="text" placeholder="开始时间（xxxx-xx-xx xx:xx）" >
+                <input id="end" type="text" placeholder="结束时间（xxxx-xx-xx xx:xx）" >
+                <input type="button" id="reset" value="重置" />
+                <input type="button" id="sc_sub" value="搜索" />
+            </div>
+            <div id="sort">
+               排序： 
+               <a d="tasc" href="javascript:void(0)">时间升序</a>
+               <a d="tdesc" href="javascript:void(0)">时间降序</a>
+               <a d="sasc" href="javascript:void(0)">评分升序</a>
+               <a d="sdesc" href="javascript:void(0)">评分降序</a>
+            </div>
+            <div id="cons">
+            </div>
+            <div id="page"></div>
+        </div>
+        <script type="text/javascript" src="./js/app.js"></script>
+        <script type="text/javascript" src="./js/auth.js"></script>
+        <script>
+            let cid = '';
+            let cur_page = 1;
+            let page_size = 10;
+            let csort = 'tdesc';
+
+            document.querySelector('#login-out a').addEventListener('click', () => {
+                localStorage.removeItem('o');
+                location.href = './index.html';
+            });
+            document.querySelector('#create button').addEventListener('click', () => {
+                hide('#create');
+                hide('#sc');
+                show('#send-box');
+                cid = '';
+            });
+            document.querySelector('#cancel').addEventListener('click', () => {
+                show('#create');
+                show('#sc');
+                document.querySelector('#title').value = '';
+                document.querySelector('#con').value = '';
+                hide('#send-box');
+            });
+            document.querySelector('#reset').addEventListener('click', () => {
+                document.querySelector('#ctitle').value = '';
+                document.querySelector('#cscore').value = '';
+                document.querySelector('#begin').value = '';
+                document.querySelector('#end').value = '';
+                csort = 'tdesc';
+                load();
+            });
+            document.querySelectorAll('#sort a').forEach(function(item){
+                item.addEventListener('click', () => {
+                    let cd = item.getAttribute('d');
+                    csort = cd;
+                    load();
+                });
+            });
+            document.querySelector('#sub').addEventListener('click', () => {
+                let title = document.querySelector('#title').value;
+                let score = document.querySelector('#score').value;
+                let content = document.querySelector('#con').value;
+                if (!title) {
+                    alert("标题不能为空");
+                } else if (!score) {
+                    alert("评分不能为空");
+                } else if (!content) {
+                    alert("内容不能为空");
+                } else {
+                    let o = localStorage.getItem('o');
+                    fetch(new Request(host + '/search/post', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({'o': o, 'uuid': cid, 'title': title, 'score': parseFloat(score), 'content': content}),
+                        mode:'cors'
+                    }))
+                    .then(response => {
+                        if (response.status === 200) {
+                            return response.json();
+                        } else {
+                        throw new Error('Something went wrong on api server!');
+                        }
+                    })
+                    .then(response => {
+                        if(response.code == 200) {
+                            document.querySelector('#title').value = '';
+                            document.querySelector('#con').value = '';
+                            show('#create');
+                            show('#sc');
+                            hide('#send-box');
+                            document.querySelector('#ctitle').value = '';
+                            document.querySelector('#cscore').value = '';
+                            load();
+                        } else if(response.code == 403) {
+                            loginout();
+                        } else {
+                            alert(response.msg);
+                        }
+                    }).catch(error => {
+                        alert(error);
+                    });
+                }
+                
+            });
+            document.querySelector('#sc_sub').addEventListener('click', () => {
+                load();
+            });
+            function load() {
+                let offset = (cur_page - 1) * page_size;
+                let id = getQueryString('uuid');
+
+                let ctitle = document.querySelector('#ctitle').value;
+                let cscore = document.querySelector('#cscore').value;
+                let begin = document.querySelector('#begin').value;
+                let end = document.querySelector('#end').value;
+
+                fetch(new Request(host + '/search/list', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({'title': ctitle, 'score': cscore, 'begin': begin, 'end': end, 'offset': offset, 'limit': page_size, 'order': csort, 'o': localStorage.getItem('o')}),
+                        mode:'cors'
+                    }))
+                .then(response => {
+                    if (response.status === 200) {
+                        return response.json();
+                    } else {
+                    throw new Error('Something went wrong on api server!');
+                    }
+                })
+                .then(response => {
+                    if(response.code == 200) {
+                        let total = response.total;
+                        let list = response.list;
+                        let cons = '';
+                        for (const info of list) {
+                            cons += `<div class="list">
+                                        <div class="title"><a target="_blank" href="./search-info.html?uuid=${info.uuid}">${info.title}</a></div>
+                                        <div class="score">${info.score}</div>
+                                        <div class="time">${timestampToTime(info.time)}</div>
+                                        <div class="tool">
+                                            <button  did="${info.uuid}" class="update">更新</button>
+                                            <button  did="${info.uuid}" class="del">删除</button>
+                                        </div>
+                                        <div class="clean"></div>
+                                    </div>`;
+                        }
+                        document.querySelector('#cons').innerHTML = cons;
+                        let all_page = Math.ceil(total / page_size);
+                        document.querySelector('#page').innerHTML = createPage(all_page, cur_page);
+                        document.querySelectorAll('#page .plist').forEach(function(item){
+                            item.addEventListener('click', () => {
+                                cur_page = parseInt(item.innerHTML);
+                                load();
+                            });
+                        });
+                        document.querySelectorAll('#cons .update').forEach(function(item){
+                            item.addEventListener('click', () => {
+                                cid = item.getAttribute('did');
+                                hide('#create');
+                                hide('#sc');
+                                show('#send-box');
+                                get_info(cid);
+                            });
+                        });
+                        document.querySelectorAll('#cons .del').forEach(function(item){
+                            item.addEventListener('click', () => {
+                                let id = item.getAttribute('did');
+                                del_text(id);
+                            });
+                        });
+                    } else if(response.code === 403) {
+                        loginout();
+                    }
+                }).catch(error => {
+                    alert(error);
+                });
+            }
+            function get_info(id) {
+                fetch(new Request(host + '/search/info?uuid=' + id + '&o=' + localStorage.getItem('o'), {
+                        method: 'GET',
+                        mode:'cors'
+                    }))
+                .then(response => {
+                    if (response.status === 200) {
+                    return response.json();
+                    } else {
+                    throw new Error('Something went wrong on api server!');
+                    }
+                })
+                .then(response => {
+                    if(response.code == 200) {
+                        let title = response.info.title;
+                        let score = response.info.score;
+                        let con = response.info.content;
+                        document.querySelector('#title').value = title;
+                        document.querySelector('#score').value = score;
+                        document.querySelector('#con').value = con;
+                    } else if(response.code === 403) {
+                        loginout();
+                    }
+                }).catch(error => {
+                    alert(error);
+                });
+            }
+            function del_text(id) {
+                fetch(new Request(host + '/search/del?uuid=' + id + '&o=' + localStorage.getItem('o'), {
+                        method: 'DELETE',
+                        mode:'cors'
+                    }))
+                .then(response => {
+                    if (response.status === 200) {
+                    return response.json();
+                    } else {
+                    throw new Error('Something went wrong on api server!');
+                    }
+                })
+                .then(response => {
+                    if(response.code == 200) {
+                        load();
+                    } else if(response.code === 403) {
+                        loginout();
+                    }
+                }).catch(error => {
+                    alert(error);
+                });
+            }
+            load();
+            document.querySelector('#user').innerHTML = ' (' + localStorage.getItem('u') + ') ';
+        </script>
+        <style>
+            body{margin: 0;}
+            #login{margin: 0 auto;width: 300px;}
+            #login .title{margin: 2rem 0;font-size: 2rem;}
+            #login label{width: 50px;display: block;margin: 0.2rem 0;}
+            #login input{padding: 0.2rem;}
+            #login .sub{margin: 1rem 0;}
+            #dis{margin: 1rem;border: 1px #ddd solid;padding: 1rem;color: #666;}
+            #login-out{text-align: right;padding: 1rem;}
+            .clean{clear: both;}
+            #nv{margin-bottom: 1rem;border-bottom: 1px #ddd solid;padding: 1rem;}
+            #nv #items{margin: 0 auto; width: 35rem;font-size: 1rem;}
+            #nv .item{float: left;width: 5rem;}
+            #content{margin: 0 auto;max-width: 980px;min-height: 800px;}
+            #create{text-align: right;padding: 1rem;}
+            #send-box{display: none;}
+            #title{margin: 0 2%;border: 1px #ddd solid;padding: 1rem;width: 92%;margin-bottom: 1rem;}
+            #score{margin: 0 2%;border: 1px #ddd solid;padding: 1rem;width: 92%;}
+            #con{margin: 2%;border: 1px #ddd solid;padding: 1rem;width: 92%;height: 15rem;}
+            #cancel{margin-left: 80%;}
+            #sub{margin-left: 2rem;}
+            #sort{margin-top: 1rem;}
+            #sort a{margin-left: 1rem;}
+            #cons{border-top: 1px #eee solid;margin-top: 1rem;}
+            #cons .list{padding: 1rem 0;border-bottom: 1px #eee solid;}
+            #cons .title{float: left;width: 50%;}
+            #cons .score{float: left;width: 20%;}
+            #cons .time{float: left;width: 20%;}
+            #cons .tool{float: left;}
+            #page-box{margin: 1rem auto;width: 20rem;}
+            #page-box .plist{width: 1rem;text-align: center;margin: 0.4rem;padding: 0.4rem;float: left;border: 1px #fff solid;cursor: pointer;}
+            #page-box .plist:hover{background: #eee;}
+            #page-box .cur{border-bottom: 1px #00f solid;}
+            #ctitle, #cscore, #begin, #end{padding: 0.4rem;border: 1px #aaa solid;}
+            #ctitle:focus, #cscore:focus, #begin:focus, #end:focus{outline: 0;}
+        </style>
+    </body>
+</html>
